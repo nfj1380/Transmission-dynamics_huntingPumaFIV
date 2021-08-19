@@ -24,10 +24,10 @@ library(tidyverse)
 library(treeio)
 library(ggtree)
 
-if (!requireNamespace("BiocManager", quietly = TRUE))
+#if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 
-BiocManager::install("ggtree")
+#BiocManager::install("ggtree")
 
 #library(Rcpp)
 
@@ -58,7 +58,7 @@ phy_simple
 Gamma_treatment <- tree_subset(beastTree , node=66,levels_back = 0)
 Gamma_stable <- tree_subset(beastTree , node=43,levels_back = 0)
 
-
+plot()
 #-----------------------------------------------#
 #####Treatment Region#####
 #-----------------------------------------------#
@@ -204,7 +204,7 @@ trans_tree_extract <- function(treeList, dateLastSample = 2014.115 ){
   ptree<-ptreeFromPhylo(tree,dateLastSample) #read.tree is also an option.
   
   
-  record<-inferTTree(ptree,mcmcIterations=200000, thin = 2, w.shape=w.shape,ws.scale=ws.scale,ws.shape=ws.shape, w.scale=w.scale,dateT=dateT, startPi = startPi, updatePi = T, updateOff.p=F)
+  record<-inferTTree(ptree,mcmcIterations=100000, thin = 2, w.shape=w.shape,ws.scale=ws.scale,ws.shape=ws.shape, w.scale=w.scale,dateT=dateT, startPi = startPi, updatePi = T, updateOff.p=F)
 }
 
 
@@ -254,12 +254,12 @@ write_graph(G, file = 'CO_treatment_network', format = c("ncol"))
 
 #add sex as a trait
 V(G)$name #need this to make sure sex is in order
-obs_sex_WS <- c('Male','Male', 'Male', 'Female', 'Female', 'Male', 'Male', 'Male', 'Male', 'Male','Male',
+obs_sex_treatment <- c('Male','Male', 'Male', 'Female', 'Female', 'Male', 'Male', 'Male', 'Male', 'Male','Male',
                 'Male', 'Female', 'Male', 'Female', 'Male', 'Male'  )
 
 Gnet <- asNetwork(G)
 
-Gnet%v%"sex" <- obs_sex_WS
+Gnet%v%"sex" <- obs_sex_treatment
 
 net.size=17
 
@@ -286,7 +286,7 @@ plot( GnetIgUSimple )
 source('subgraph_edges_homophily.R') #need this
 
 hphly <- GnetIgUSimple  %>%
-  subgraph_edges_homophily(vattr_name = "sex", heterophily = TRUE) %>%  #change heterophyly to false
+  subgraph_edges_homophily(vattr_name = "sex", heterophily = FALSE) %>%  #change heterophyly to false
   strength(mode= 'out') %>%
   as.data.frame()
 
@@ -339,16 +339,17 @@ vertexNameTableObs <- data.frame(name=V(G)$name, sex = obs_sex_treatment )
 
 weightedHomophily_dropTip <- function(trans_treeList){
 
-tre <-computeMatWIW(trans_treeList, burnin = 0.1)
-G <- igraph::as.directed(graph.adjacency(tre, weighted = T))
-plot(G)
-graphNames <- data.frame(names=V(G)$name)
+  tre <-computeMatWIW(trans_treeList, burnin = 0.1)
+  G <- igraph::as.directed(graph.adjacency(tre, weighted = T))
+  G <- igraph::delete.edges(G, which(E(G)$weight <=.05)) 
+  plot(G)
+  graphNames <- data.frame(names=V(G)$name)
 
-namesMatch <- vertexNameTable %>%
+    namesMatch <- vertexNameTableObs %>%
 
-  filter(name %in% graphNames$names)
+    filter(name %in% graphNames$names)
 
-  sim_sex <- c(namesMatch$sex)
+     sim_sex <- c(namesMatch$sex)
   
   Gnet <- asNetwork(G)
   
@@ -361,10 +362,8 @@ namesMatch <- vertexNameTable %>%
   GnetIgUSimple <- simplify( GnetIg, edge.attr.comb = max) #sum all edges linking individuals
   plot( GnetIgUSimple )
   
-  source('subgraph_edges_homophily.R') #need this
-  
   hphly <- GnetIgUSimple  %>%
-    subgraph_edges_homophily(vattr_name = "sex", heterophily = TRUE) %>%  #change heterophyly to false
+    subgraph_edges_homophily(vattr_name = "sex", heterophily = FALSE) %>%  #change heterophyly to false
     strength(mode= 'out') %>%
     as.data.frame()
   
@@ -373,12 +372,12 @@ namesMatch <- vertexNameTable %>%
     summarise(average = mean(.))
   
   malesHphly  
-  malesHphly[2,2]
+  #malesHphly[2,2]
   
   
 }
 
-weightedHomophilyList <- lapply(trans_treeList, weightedHomophily )
+weightedHomophilyList <- lapply(trans_treeList, weightedHomophily_dropTip )
 
 
 
@@ -456,7 +455,7 @@ par(mfrow=c(1,1))
 plotTTree2(cons_stable,w.shape,w.scale)
 plotTTree(cons_stable,w.shape,w.scale)
 
-tre <-computeMatWIW(ttree_stable, burnin = 0.1);str(tre)
+tre_stable <-computeMatWIW(ttree_stable, burnin = 0.1);str(tre)
 
 #calculate R2
 
@@ -498,12 +497,8 @@ g1 <- getInfectionTimeDist(recordFR,k='X299_FR_2009-06-03',show.plot = T) #AM20
 #-----------------------------------------------#
 #####Code to drop tip simulate#####
 #-----------------------------------------------#
+tree<- as.phylo(Gamma_stable)
 
-drop_tip_ptree <- function(tree){
-  i <- sample(1:length(tree$tip.label), 1)
-  ape::drop.tip(tree, tip=i) }
-
-tree<- read.tree('Clade3FRFIV.nexus')
 plot(tree)
 
 #copy the object across 10 iterations
@@ -524,10 +519,10 @@ trans_tree_extract <- function(treeList, dateLastSample = 2013.211 ){
 }
 
 
-trans_treeList <- lapply(treelist_dropTip, trans_tree_extract )
+trans_treeList_stable <- lapply(treelist_dropTip, trans_tree_extract )
 str(tree )
 
-R2list <- function(trans_treeList){
+R2list <- function(trans_treeList_stable){
   R2 <- sapply(trans_treeList,function(x) x$off.r)
   summary(R2)
 }
@@ -539,30 +534,31 @@ saveRDS(Summary_R2_stable, 'Summary_R2_stable')
 
 ################################ Stable region networks ######################################
 
-if( "igraph" %in% (.packages())) {
-  detach("package:igraph", unload=TRUE)
-}
-library(ergm) #easier to assign vertex attributes using the ERGM package
+G <- as.directed(graph.adjacency(tre_stable, weighted = T)) #make a directed graph
+deg <- degree(G, mode="all") #degree
+
+G <- igraph::delete.edges(G, which(E(G)$weight <=.05)) #removed some of the less supported links
+V(G)$size <- deg*3 #makes node size more visible
+plot.igraph2(G, edge.arrow.size =abs(E(G)$weight), vertex.size=(1*deg),  edge.color=c("red","green")[sign(E(G)$weight)],
+             edge.width = 10 *abs(E(G)$weight), vertex.size=1+(1*deg), vertex.color='gold', edge.curved=0.6, edge.arrow.size=5 *abs(E(G)$weight), vertex.label.dist = 1, vertex.frame.color = 'gray', vertex.label.color='black')
+
+
 #add sex as a trait
 V(G)$name #need this to make sure sex is in order
-obs_sex_FR <- c('Female','Male', 'Female', 'Female', 'Female', 'Female', 'Male', 'Female', 'Female', 'Male', 'Female', 'Female',
+obs_sex_stable <- c('Female','Male', 'Female', 'Female', 'Female', 'Female', 'Male', 'Female', 'Female', 'Male', 'Female', 'Female',
                 'Female', 'Female', 'Male', 'Female', 'Male')
-
-
-#for some reason igraph syntax in condusing for edge/node attributes
-
-
 Gnet <- asNetwork(G)
 
 Gnet
 
-Gnet%v%"sex" <- obs_sex_FR
+Gnet%v%"sex" <-obs_sex_stable 
 
+net.size=16
 
 #CHECK IT WORKED
 node_colors <- rep("",net.size)
 for(i in 1:net.size){
-  if(get.node.attr(g,"sex")[i] == "Male"){
+  if(get.node.attr(Gnet,"sex")[i] == "Male"){
     node_colors[i] <- "lightblue"
   }else{
     node_colors[i] <- "maroon"
@@ -570,6 +566,7 @@ for(i in 1:net.size){
 }
 plot.network(Gnet, # our network object
              vertex.col = node_colors)
+
 ######################################
 #calculate weighted degree for each sex
 library(igraph)
@@ -591,7 +588,7 @@ malesHphly  <-cbind(strength=hphly, sex=V(GnetIgUSimple)$sex ) %>%
   summarise(average = mean(.))
 
 malesHphly  
-malesHphly[2,2] #average weighted degree for males
+
 
 #compare just degree
 
@@ -613,3 +610,23 @@ avgStrength$ strength <- as.numeric(avgStrength $ strength)
 avgStrength %>%
   group_by(sex) %>%
   summarise(average = mean(strength))
+
+###########################################################
+#How does this impact network topology?
+###########################################################
+
+#weighted degree homophily
+
+#make a dataframe of vertex names and attributes
+
+V(G)$name #need this to make sure sex is in order
+obs_sex_stable <- c('Male', 'Female', 'Female', 'Female', 'Male', 'Female',  'Male', 'Male', 'Female', 'Female','Female',
+                    'Male', 'Female', 'Female', 'Female', 'Male')
+
+
+vertexNameTableObs <- data.frame(name=V(G)$name, sex = obs_sex_stable )
+
+#drop one tip and record weighted homophily
+
+
+weightedHomophilyList_stable <- lapply(trans_treeList_stable , weightedHomophily_dropTip )
